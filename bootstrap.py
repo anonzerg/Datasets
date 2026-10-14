@@ -40,7 +40,7 @@ def main() -> None:
 
     for catalog in catalogs:
         logging.info(f'Fetching {catalog}')
-        tables = fetch(catalog, ['*'], row_limit=5)
+        tables = fetch(catalog, ['*'], row_limit=-1)
         save(tables)
 
     return None
