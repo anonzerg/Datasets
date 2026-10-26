@@ -2,12 +2,13 @@
 
 import sys
 import logging
-
 from pathlib import Path
+
 from astroquery.vizier import Vizier
 from astroquery.utils import TableList
 
-logger = logging.getLogger(__name__)
+
+log = logging.getlog(__name__)
 
 
 def fetch(catalogs: str | list[str], columns: list[str], *args, **kwargs) -> TableList:
@@ -25,17 +26,17 @@ def save(tables: TableList, overwrite: bool = False, **kwargs) -> None:
         try:
             name = table.meta['name'].split('/')[-1]
         except (KeyError, AttributeError):
-            logger.warning('Missing table name!')
+            log.warning('Missing table name!')
             continue
 
-        path = Path(f'./tables/{name}.parquet')
+        path = Path(f'./Tables/{name}.parquet')
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and not overwrite:
-            logger.warning(f'{path} already exists. {name} skipped.')
+            log.warning(f'{path} already exists. {name} skipped.')
             continue
 
         table.to_pandas().to_parquet(path, index=False, **kwargs)
-        logger.info(f'Wrote {len(table)} rows to {path}')
+        log.info(f'Wrote {len(table)} rows to {path}')
 
 
 def main() -> None:
@@ -48,29 +49,28 @@ def main() -> None:
     failures = []
 
     for catalog in catalogs:
-        logger.info(f'Fetching {catalog}')
+        log.info(f'Fetching {catalog}')
         try:
             tables = fetch(catalog, ['*'], row_limit=-1)
         except Exception as exc:
-            logger.error(exc)
+            log.error(exc)
             failures.append(catalog)
             continue
 
         try:
             save(tables)
         except Exception as exc:
-            logger.error(exc)
+            log.error(exc)
             failures.append(catalog)
             continue
 
     if failures:
         sys.exit(f'{len(failures)}/{len(catalogs)} catalogs failed: {", ".join(failures)}')
     else:
-        logger.info(f'{len(catalogs)} catalogs saved successfully or already exist.')
+        log.info(f'{len(catalogs)} catalogs saved successfully or already exist.')
         sys.exit(0)
 
 if __name__ == '__main__':
-
     logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s [%(levelname)s] %(message)s',
