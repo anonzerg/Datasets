@@ -2,13 +2,14 @@
 
 import sys
 import logging
+import sqlite3
 from pathlib import Path
 
 from astroquery.vizier import Vizier
 from astroquery.utils import TableList
 
 
-log = logging.getlog(__name__)
+log = logging.getLogger(__name__)
 
 
 def fetch(catalogs: str | list[str], columns: list[str], *args, **kwargs) -> TableList:
@@ -20,7 +21,7 @@ def fetch(catalogs: str | list[str], columns: list[str], *args, **kwargs) -> Tab
     return tables
 
 
-def save(tables: TableList, overwrite: bool = False, **kwargs) -> None:
+def save_as_parquet(tables: TableList, overwrite: bool = False, **kwargs) -> None:
     # TODO: write a tmp file and replace.
     for table in tables:
         try:
@@ -36,6 +37,31 @@ def save(tables: TableList, overwrite: bool = False, **kwargs) -> None:
             continue
 
         table.to_pandas().to_parquet(path, index=False, **kwargs)
+        log.info(f'Wrote {len(table)} rows to {path}')
+
+
+def save_as_sql(tables: TableList, overwrite: bool = False, **kwargs) -> None:
+    for table in tables:
+        try:
+            name = table.meta['name'].split('/')[-1]
+        except (KeyError, AttributeError):
+            log.warning('Missing table name!')
+            continue
+
+        path = Path(f'./Tables/{name}.sqlite')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and not overwrite:
+            log.warning(f'{path} already exists. {name} skipped.')
+            continue
+
+        with sqlite3.connect(path) as con:
+        table.to_pandas().to_sql(
+                name=name,
+                con=con,
+                if_exists='replace',
+                index=False,
+                **kwargs,
+                )
         log.info(f'Wrote {len(table)} rows to {path}')
 
 
@@ -58,7 +84,8 @@ def main() -> None:
             continue
 
         try:
-            save(tables)
+            save_as_parquet(tables)
+            save_as_sql(tables)
         except Exception as exc:
             log.error(exc)
             failures.append(catalog)
