@@ -3,6 +3,7 @@
 import sys
 import logging
 import sqlite3
+import argparse
 from pathlib import Path
 
 from astroquery.vizier import Vizier
@@ -33,14 +34,14 @@ def save_as_parquet(tables: TableList, overwrite: bool = False, **kwargs) -> Non
         path = Path(f'./Tables/{name}.parquet')
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and not overwrite:
-            log.warning(f'{path} already exists. {name} skipped.')
+            log.warning(f'{path} already exists. skipping {name}.')
             continue
 
         table.to_pandas().to_parquet(path, index=False, **kwargs)
         log.info(f'Wrote {len(table)} rows to {path}')
 
 
-def save_as_sql(tables: TableList, overwrite: bool = False, **kwargs) -> None:
+def save_as_sql(tables: TableList, overwrite, **kwargs) -> None:
     for table in tables:
         try:
             name = table.meta['name'].split('/')[-1]
@@ -54,56 +55,113 @@ def save_as_sql(tables: TableList, overwrite: bool = False, **kwargs) -> None:
             log.warning(f'{path} already exists. {name} skipped.')
             continue
 
-        with sqlite3.connect(path) as con:
-        table.to_pandas().to_sql(
-                name=name,
-                con=con,
-                if_exists='replace',
-                index=False,
-                **kwargs,
-                )
+        con = sqlite3.connect(path)
+        try:
+            table.to_pandas().to_sql(
+                    name=name,
+                    con=con,
+                    if_exists='replace',
+                    index=False,
+                    **kwargs,
+                    )
+        finally:
+            con.close()
+
         log.info(f'Wrote {len(table)} rows to {path}')
 
 
-def main() -> None:
-    catalogs = [
-            'J/A+A/686/A42/clusters',
-            'J/A+A/686/A42/members',
-            'J/MNRAS/508/3877/maincat'
-            ]
+def main(args: argparse.Namespace) -> None:
+    #catalogs = [
+    #        'J/A+A/686/A42/clusters',
+    #        'J/A+A/686/A42/members',
+    #        'J/MNRAS/508/3877/maincat'
+    #        ]
 
+    catalogs = args.catalogs
+    row_limit = args.row_limit
+    overwrite = args.overwrite
     failures = []
 
     for catalog in catalogs:
         log.info(f'Fetching {catalog}')
         try:
-            tables = fetch(catalog, ['*'], row_limit=-1)
-        except Exception as exc:
-            log.error(exc)
+            tables = fetch(catalog, ['*'], row_limit=row_limit)
+        except Exception as e:
+            log.error(e)
             failures.append(catalog)
             continue
 
-        try:
-            save_as_parquet(tables)
-            save_as_sql(tables)
-        except Exception as exc:
-            log.error(exc)
-            failures.append(catalog)
-            continue
+        if args.sql:
+            try:
+                save_as_sql(tables, overwrite=overwrite)
+            except Exception as e:
+                log.error(e)
+                failures.append(catalog)
+                continue
+
+        else:
+            try:
+                save_as_parquet(tables, overwrite=overwrite)
+            except Exception as e:
+                log.error(e)
+                failures.append(catalog)
+                continue
+
 
     if failures:
         sys.exit(f'{len(failures)}/{len(catalogs)} catalogs failed: {", ".join(failures)}')
     else:
-        log.info(f'{len(catalogs)} catalogs saved successfully or already exist.')
+        log.info(f'{len(catalogs)} catalog(s) saved successfully or already exist.')
         sys.exit(0)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+            prog='bootstrap',
+            description='Get datasets from VizieR.',
+            epilog='example: ./bootstrap -l 5 -s J/A+A/686/A42/clusters'
+            )
+    output = parser.add_mutually_exclusive_group()
+    parser.add_argument(
+            'catalogs',
+            nargs='+',
+            help='one or more VizieR catalog identifier',
+            )
+    parser.add_argument(
+            '-l',
+            '--row-limit',
+            type=int,
+            default=-1,
+            help='maximum rows per table; `-1` means no limit (default is %(default)s)',
+            )
+    output.add_argument(
+            '-s',
+            '--sql',
+            action='store_true',
+            help='save as SQLite databases',
+            )
+    output.add_argument(
+            '-p',
+            '--parquet',
+            action='store_true',
+            help='save as Apache Parquet (default)',
+            )
+    parser.add_argument(
+            '-o',
+            '--overwrite',
+            action='store_true',
+            help='overwrite existing files.',
+            )
+
+    args = parser.parse_args()
+
     logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] %(message)s',
+            format='%(asctime)s (%(module)s:%(lineno)s) [%(levelname)s] %(message)s',
             datefmt='%H:%M:%S'
             )
+
     try:
-        main()
+        main(args)
     except KeyboardInterrupt:
-        sys.exit('Interrupted!')
+        log.error('Interrupted!')
+        sys.exit(1)
