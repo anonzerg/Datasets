@@ -80,12 +80,19 @@ def main(args: argparse.Namespace) -> None:
     catalogs = args.catalogs
     row_limit = args.row_limit
     overwrite = args.overwrite
+    if args.columns:
+        columns = args.columns
+    elif args.all:
+        columns = ['**']
+    else:
+        columns = ['*']
+
     failures = []
 
     for catalog in catalogs:
         log.info(f'Fetching {catalog}')
         try:
-            tables = fetch(catalog, ['*'], row_limit=row_limit)
+            tables = fetch(catalog, columns=['**'], row_limit=row_limit)
         except Exception as e:
             log.error(e)
             failures.append(catalog)
@@ -121,6 +128,7 @@ if __name__ == '__main__':
             epilog='example: ./bootstrap -l 5 -s J/A+A/686/A42/clusters'
             )
     output = parser.add_mutually_exclusive_group()
+    columns = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument(
             'catalogs',
             nargs='+',
@@ -149,7 +157,25 @@ if __name__ == '__main__':
             '-o',
             '--overwrite',
             action='store_true',
-            help='overwrite existing files.',
+            help='overwrite existing files',
+            )
+    columns.add_argument(
+            '-a',
+            '--all',
+            action='store_true',
+            help='get all available columns',
+            )
+    columns.add_argument(
+            '-d',
+            '--default',
+            action='store_true',
+            help='get default columns (default)',
+            )
+    columns.add_argument(
+            '-c',
+            '--columns',
+            nargs='+',
+            help='get custom columns'
             )
 
     args = parser.parse_args()
