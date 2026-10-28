@@ -71,12 +71,6 @@ def save_as_sql(tables: TableList, overwrite, **kwargs) -> None:
 
 
 def main(args: argparse.Namespace) -> None:
-    #catalogs = [
-    #        'J/A+A/686/A42/clusters',
-    #        'J/A+A/686/A42/members',
-    #        'J/MNRAS/508/3877/maincat'
-    #        ]
-
     catalogs = args.catalogs
     row_limit = args.row_limit
     overwrite = args.overwrite
