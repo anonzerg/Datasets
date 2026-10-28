@@ -86,7 +86,7 @@ def main(args: argparse.Namespace) -> None:
     for catalog in catalogs:
         log.info(f'Fetching {catalog}')
         try:
-            tables = fetch(catalog, columns=['**'], row_limit=row_limit)
+            tables = fetch(catalog, columns=columns, row_limit=row_limit)
         except Exception as e:
             log.error(e)
             failures.append(catalog)
